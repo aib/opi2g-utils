@@ -79,38 +79,44 @@ class Responses(enum.Enum):
 def main():
 	with serial.Serial('/dev/ttyACM0', 115200) as sport:
 		if not 'skippdl' in sys.argv:
-			_do_pdls(sport)
+			_do_pdls(sport, "/tmp/rom/pdl1.bin", "/tmp/rom/pdl2.bin")
 		_upload_partitions(sport)
 
-def _do_pdls(interface):
+def _do_pdls(interface, pdl1path, pdl2path):
 	_communicate(interface, Commands.CONNECT)
-	_send_partition(interface, "pdl1", "/tmp/rom/pdl1.bin", 0x00100100, 4096)
+	with open(pdl1path, 'rb') as f:
+		_send_partition_data(interface, "pdl1", f.read(), 0x00100100, chunk_size=4096)
 	_communicate(interface, Commands.EXEC_DATA, _pack32(0x00100100))
 
 	_communicate(interface, Commands.CONNECT)
-	_send_partition(interface, "pdl2", "/tmp/rom/pdl2.bin", 0x80008000, 4096)
+	with open(pdl2path, 'rb') as f:
+		_send_partition_data(interface, "pdl2", f.read(), 0x80008000, chunk_size=4096)
 	_communicate(interface, Commands.EXEC_DATA, _pack32(0x80008000))
 
 def _upload_partitions(interface):
+		_communicate(interface, Commands.CONNECT)
+		print(_communicate(interface, Commands.READ_PARTITION_TABLE, raw_response=True))
+
 		_communicate(interface, Commands.IMAGE_LIST, _pack32(0) + _pack32(0x65646568) + "bootloader,nandroot".encode('ascii'))
-		_send_partition(interface, "hodo", "/home/aib/proj/opi/git/u-boot/u-boot-nand.rda", 0x00000000)
-		_send_partition(interface, "nandroot", "/home/aib/proj/opi/mtd3/mtd1.bak", 0x00200000)
+		print(_communicate(interface, Commands.READ_PARTITION_TABLE, raw_response=True))
 
-def _send_partition(interface, partname, filename, target_addr, chunk_size=4096):
-	print("Sending file %s as partition %s to 0x%08x" % (filename, partname, target_addr))
+		with open("/home/aib/proj/OS/u-boot-RDA8810/u-boot.rda", 'rb') as f:
+			data = f.read()
+			_send_partition_data(interface, "bootloader", data)
+		print(_communicate(interface, Commands.READ_PARTITION_TABLE, raw_response=True))
 
-	with open(filename, 'rb') as f:
-		filedata = f.read()
+def _send_partition_data(interface, partname, data, target_addr=0, chunk_size=4096):
+	print("Sending partition %s (len %d) to 0x%08x" % (partname, len(data), target_addr))
 
-		pname = partname.encode('ascii')
-		pname += b'\0' * (MAX_PART_NAME - len(pname))
+	pname = partname.encode('ascii')
+	pname += b'\0' * (MAX_PART_NAME - len(pname))
 
-		_communicate(interface, Commands.START_DATA, _pack32(target_addr) + _pack32(len(filedata)) + pname)
-		for (f, chunk) in enumerate(_chunk_data(filedata, chunk_size)):
-			_communicate(interface, Commands.MID_DATA, _pack32(f) + _pack32(len(chunk)) + chunk)
+	_communicate(interface, Commands.START_DATA, _pack32(target_addr) + _pack32(len(data)) + pname)
+	for (f, chunk) in enumerate(_chunk_data(data, chunk_size)):
+		_communicate(interface, Commands.MID_DATA, _pack32(f) + _pack32(len(chunk)) + chunk)
 
-		crc = binascii.crc32(filedata)
-		_communicate(interface, Commands.END_DATA, _pack32(0) + _pack32(4) + _pack32(crc))
+	crc = binascii.crc32(data)
+	_communicate(interface, Commands.END_DATA, _pack32(0) + _pack32(4) + _pack32(crc))
 
 def _chunk_data(data, chunk_size):
 	chunks = []
