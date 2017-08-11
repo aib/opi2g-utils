@@ -84,11 +84,11 @@ def main():
 
 def _do_pdls(interface):
 	_communicate(interface, Commands.CONNECT)
-	_send_file(interface, "/tmp/rom/pdl1.bin", 0x00100100, 4096)
+	_send_partition(interface, "pdl1", "/tmp/rom/pdl1.bin", 0x00100100, 4096)
 	_communicate(interface, Commands.EXEC_DATA, _pack32(0x00100100))
 
 	_communicate(interface, Commands.CONNECT)
-	_send_file(interface, "/tmp/rom/pdl2.bin", 0x80008000, 4096)
+	_send_partition(interface, "pdl2", "/tmp/rom/pdl2.bin", 0x80008000, 4096)
 	_communicate(interface, Commands.EXEC_DATA, _pack32(0x80008000))
 
 def _upload_partitions(interface):
@@ -111,17 +111,6 @@ def _send_partition(interface, partname, filename, target_addr, chunk_size=4096)
 
 		crc = binascii.crc32(filedata)
 		_communicate(interface, Commands.END_DATA, _pack32(0) + _pack32(4) + _pack32(crc))
-
-def _send_file(interface, filename, target_addr, chunk_size=4096):
-	print("Sending file %s to 0x%08x" % (filename, target_addr))
-
-	with open(filename, 'rb') as f:
-		filedata = f.read()
-
-		_communicate(interface, Commands.START_DATA, _pack32(target_addr) + _pack32(len(filedata)))
-		for chunk in _chunk_data(filedata, chunk_size):
-			_communicate(interface, Commands.MID_DATA, _pack32(0) + _pack32(len(chunk)) + chunk)
-		_communicate(interface, Commands.END_DATA)
 
 def _chunk_data(data, chunk_size):
 	chunks = []
