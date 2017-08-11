@@ -15,6 +15,7 @@ FLOWID_DATA        = b'\xbb'
 FLOWID_ACK         = b'\xff'
 FLOWID_ERROR       = b'\xee'
 
+CONFIG_MTD_PTBL_OFFS = 49152
 MAX_PART_NAME = 30
 
 class Commands(enum.Enum):
@@ -79,8 +80,9 @@ class Responses(enum.Enum):
 def main():
 	with serial.Serial('/dev/ttyACM0', 115200) as sport:
 		if not 'skippdl' in sys.argv:
-			_do_pdls(sport, "/tmp/rom/pdl1.bin", "/tmp/rom/pdl2.bin")
+			_do_pdls(sport, "/tmp/rom/pdl1.bin", "/tmp/rom/pdl22.bin")
 		_upload_partitions(sport)
+		_communicate(sport, Commands.DOWNLOAD_FINISH)
 
 def _do_pdls(interface, pdl1path, pdl2path):
 	_communicate(interface, Commands.CONNECT)
@@ -95,15 +97,21 @@ def _do_pdls(interface, pdl1path, pdl2path):
 
 def _upload_partitions(interface):
 		_communicate(interface, Commands.CONNECT)
-		print(_communicate(interface, Commands.READ_PARTITION_TABLE, raw_response=True))
+		print(_communicate(interface, Commands.READ_PARTITION_TABLE, raw_response=True).decode('ascii'))
 
-		_communicate(interface, Commands.IMAGE_LIST, _pack32(0) + _pack32(0x65646568) + "bootloader,nandroot".encode('ascii'))
-		print(_communicate(interface, Commands.READ_PARTITION_TABLE, raw_response=True))
+#		_communicate(interface, Commands.IMAGE_LIST, _pack32(0) + _pack32(0x65646568) + "bootloader,nandroot".encode('ascii'))
 
-		with open("/home/aib/proj/OS/u-boot-RDA8810/u-boot.rda", 'rb') as f:
+		with open("/home/aib/proj/opi/mtd3/mtd0.bak", 'rb') as f:
 			data = f.read()
-			_send_partition_data(interface, "bootloader", data)
-		print(_communicate(interface, Commands.READ_PARTITION_TABLE, raw_response=True))
+#			ptable = "mtdparts=rda_nand:2M@0(bootloader),510M(foo)".encode('ascii')
+#			ptbin = _pack32(len(ptable)) + _pack32(binascii.crc32(ptable)) + ptable
+#			interjected_data = data[0:CONFIG_MTD_PTBL_OFFS] + ptbin + data[CONFIG_MTD_PTBL_OFFS+len(ptbin):]
+#			_send_partition_data(interface, "bootloader", interjected_data)
+			_send_partition_data(interface, "bootloader", data, chunk_size=256*1024)
+
+		with open("/home/aib/proj/opi/mtd3/mtd1.bak", 'rb') as f:
+			data = f.read()
+			_send_partition_data(interface, "nandroot", data, chunk_size=256*1024)
 
 def _send_partition_data(interface, partname, data, target_addr=0, chunk_size=4096):
 	print("Sending partition %s (len %d) to 0x%08x" % (partname, len(data), target_addr))
@@ -112,7 +120,10 @@ def _send_partition_data(interface, partname, data, target_addr=0, chunk_size=40
 	pname += b'\0' * (MAX_PART_NAME - len(pname))
 
 	_communicate(interface, Commands.START_DATA, _pack32(target_addr) + _pack32(len(data)) + pname)
+	total = 0
 	for (f, chunk) in enumerate(_chunk_data(data, chunk_size)):
+		total += len(chunk)
+		print("Sent chunk %d, size %d, total %d (%x)" % (f, len(chunk), total, total))
 		_communicate(interface, Commands.MID_DATA, _pack32(f) + _pack32(len(chunk)) + chunk)
 
 	crc = binascii.crc32(data)
@@ -120,11 +131,11 @@ def _send_partition_data(interface, partname, data, target_addr=0, chunk_size=40
 
 def _chunk_data(data, chunk_size):
 	chunks = []
-	while chunk_size <= len(data):
-		chunks.append(data[0:chunk_size])
-		data = data[chunk_size:]
-	if len(data) > 0:
-		chunks.append(data)
+	off = 0
+	while off < len(data):
+		chunk = data[off:off+chunk_size]
+		chunks.append(chunk)
+		off += len(chunk)
 	return chunks
 
 def _pack32(num):
