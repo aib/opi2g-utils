@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import binascii
 import enum
 import struct
 import sys
@@ -98,37 +99,38 @@ def _upload_partitions(interface):
 def _send_partition(interface, partname, filename, target_addr, chunk_size=4096):
 	print("Sending file %s as partition %s to 0x%08x" % (filename, partname, target_addr))
 
-	(chunks, total_size) = _get_file_chunks(filename, chunk_size)
+	with open(filename, 'rb') as f:
+		filedata = f.read()
 
-	pname = partname.encode('ascii')
-	pname += b'\0' * (MAX_PART_NAME - len(pname))
+		pname = partname.encode('ascii')
+		pname += b'\0' * (MAX_PART_NAME - len(pname))
 
-	_communicate(interface, Commands.START_DATA, _pack32(target_addr) + _pack32(total_size) + pname)
-	for (f, chunk) in enumerate(chunks):
-		_communicate(interface, Commands.MID_DATA, _pack32(f) + _pack32(len(chunk)) + chunk)
-	_communicate(interface, Commands.END_DATA)
+		_communicate(interface, Commands.START_DATA, _pack32(target_addr) + _pack32(len(filedata)) + pname)
+		for (f, chunk) in enumerate(_chunk_data(filedata, chunk_size)):
+			_communicate(interface, Commands.MID_DATA, _pack32(f) + _pack32(len(chunk)) + chunk)
+
+		crc = binascii.crc32(filedata)
+		_communicate(interface, Commands.END_DATA, _pack32(0) + _pack32(4) + _pack32(crc))
 
 def _send_file(interface, filename, target_addr, chunk_size=4096):
 	print("Sending file %s to 0x%08x" % (filename, target_addr))
 
-	(chunks, total_size) = _get_file_chunks(filename, chunk_size)
-
-	_communicate(interface, Commands.START_DATA, _pack32(target_addr) + _pack32(total_size))
-	for chunk in chunks:
-		_communicate(interface, Commands.MID_DATA, _pack32(0) + _pack32(len(chunk)) + chunk)
-	_communicate(interface, Commands.END_DATA)
-
-def _get_file_chunks(filename, chunk_size):
-	chunks = []
 	with open(filename, 'rb') as f:
-		while True:
-			chunk = f.read(chunk_size)
-			if len(chunk) == 0:
-				break
-			chunks.append(chunk)
+		filedata = f.read()
 
-		total_size = sum(map(lambda c: len(c), chunks))
-	return (chunks, total_size)
+		_communicate(interface, Commands.START_DATA, _pack32(target_addr) + _pack32(len(filedata)))
+		for chunk in _chunk_data(filedata, chunk_size):
+			_communicate(interface, Commands.MID_DATA, _pack32(0) + _pack32(len(chunk)) + chunk)
+		_communicate(interface, Commands.END_DATA)
+
+def _chunk_data(data, chunk_size):
+	chunks = []
+	while chunk_size <= len(data):
+		chunks.append(data[0:chunk_size])
+		data = data[chunk_size:]
+	if len(data) > 0:
+		chunks.append(data)
+	return chunks
 
 def _pack32(num):
 	return struct.pack('<I', num)
