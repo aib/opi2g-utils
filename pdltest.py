@@ -6,7 +6,6 @@ import sys
 import time
 
 import serial
-#import usb1
 
 PDL_TAG = b'\xae'
 
@@ -14,6 +13,8 @@ HOST_PACKET_FLOWID = b'\xff'
 FLOWID_DATA        = b'\xbb'
 FLOWID_ACK         = b'\xff'
 FLOWID_ERROR       = b'\xee'
+
+MAX_PART_NAME = 30
 
 class Commands(enum.Enum):
 	CONNECT = 0
@@ -76,15 +77,65 @@ class Responses(enum.Enum):
 
 def main():
 	with serial.Serial('/dev/ttyACM0', 115200) as sport:
-		_communicate(sport, Commands.CONNECT)
-#		_communicate(sport, Commands.START_DATA, _pack32(0x100100) + _pack32(0x7f80))
+		if not 'skippdl' in sys.argv:
+			_do_pdls(sport)
+		_upload_partitions(sport)
+
+def _do_pdls(interface):
+	_communicate(interface, Commands.CONNECT)
+	_send_file(interface, "/tmp/rom/pdl1.bin", 0x00100100, 4096)
+	_communicate(interface, Commands.EXEC_DATA, _pack32(0x00100100))
+
+	_communicate(interface, Commands.CONNECT)
+	_send_file(interface, "/tmp/rom/pdl2.bin", 0x80008000, 4096)
+	_communicate(interface, Commands.EXEC_DATA, _pack32(0x80008000))
+
+def _upload_partitions(interface):
+		_communicate(interface, Commands.IMAGE_LIST, _pack32(0) + _pack32(0x65646568) + "bootloader,nandroot".encode('ascii'))
+		_send_partition(interface, "hodo", "/home/aib/proj/opi/git/u-boot/u-boot-nand.rda", 0x00000000)
+		_send_partition(interface, "nandroot", "/home/aib/proj/opi/mtd3/mtd1.bak", 0x00200000)
+
+def _send_partition(interface, partname, filename, target_addr, chunk_size=4096):
+	print("Sending file %s as partition %s to 0x%08x" % (filename, partname, target_addr))
+
+	(chunks, total_size) = _get_file_chunks(filename, chunk_size)
+
+	pname = partname.encode('ascii')
+	pname += b'\0' * (MAX_PART_NAME - len(pname))
+
+	_communicate(interface, Commands.START_DATA, _pack32(target_addr) + _pack32(total_size) + pname)
+	for (f, chunk) in enumerate(chunks):
+		_communicate(interface, Commands.MID_DATA, _pack32(f) + _pack32(len(chunk)) + chunk)
+	_communicate(interface, Commands.END_DATA)
+
+def _send_file(interface, filename, target_addr, chunk_size=4096):
+	print("Sending file %s to 0x%08x" % (filename, target_addr))
+
+	(chunks, total_size) = _get_file_chunks(filename, chunk_size)
+
+	_communicate(interface, Commands.START_DATA, _pack32(target_addr) + _pack32(total_size))
+	for chunk in chunks:
+		_communicate(interface, Commands.MID_DATA, _pack32(0) + _pack32(len(chunk)) + chunk)
+	_communicate(interface, Commands.END_DATA)
+
+def _get_file_chunks(filename, chunk_size):
+	chunks = []
+	with open(filename, 'rb') as f:
+		while True:
+			chunk = f.read(chunk_size)
+			if len(chunk) == 0:
+				break
+			chunks.append(chunk)
+
+		total_size = sum(map(lambda c: len(c), chunks))
+	return (chunks, total_size)
 
 def _pack32(num):
 	return struct.pack('<I', num)
 
-def _communicate(interface, cmd, payload=b''):
+def _communicate(interface, cmd, payload=b'', raw_response=False):
 	_send_command(interface, cmd, payload)
-	return _receive_command(interface)
+	return _receive_command(interface, raw_response)
 
 def _send_command(interface, cmd, payload=b''):
 	if cmd in Commands.__members__.values():
@@ -97,17 +148,20 @@ def _send_command(interface, cmd, payload=b''):
 	data = struct.pack('<I', cmdnum) + payload
 	_send_packet(interface, data)
 
-def _receive_command(interface):
+def _receive_command(interface, raw_response=False):
 	(data, flowid) = _receive_packet(interface)
 	rspdata = data[0:4]
 	(rsp,) = struct.unpack('<I', rspdata)
 
-	for (key, e) in Responses.__members__.items():
-		if rsp == e.value:
-			print("-> %s" % (e,))
-			return e
+	if raw_response:
+		return data
+	else:
+		for (key, e) in Responses.__members__.items():
+			if rsp == e.value:
+				print("-> %s" % (e,))
+				return e
 
-	print("Response %r not in responses" % (rspdata,))
+		print("Response %r not in responses" % (rspdata,))
 
 def _send_packet(interface, data):
 	pkt = PDL_TAG + struct.pack('<I', len(data)) + HOST_PACKET_FLOWID + data
@@ -133,22 +187,6 @@ def _receive_packet(interface):
 		sys.exit(2)
 
 	return (data, flowid)
-
-#	with usb1.USBContext() as context:
-#		try:
-#			handle = context.openByVendorIDAndProductID(0x0525, 0xa4a7)
-#		except usb1.USBErrorAccess as e:
-#			print(e)
-#			sys.exit(2)
-
-#		print("Opened %s" % (handle.getDevice(),))
-
-#		with handle.claimInterface(1) as interface:
-#			print(dir(interface))
-#			handle.bulkWrite(bytes.fromhex('ae 04 00 00 00 ff 00 00 00 00'))
-#			handle.bulkWrite(bytes.fromhex('ae 0c 00 00 00 ff 04 00 00 00 00 01 10 00 80 7f 00 00'))
-#			handle.bulkRead
-#			print(dir(handle))
 
 if __name__ == '__main__':
 	main()
