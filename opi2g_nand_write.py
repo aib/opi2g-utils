@@ -9,6 +9,11 @@ import time
 
 import serial
 
+g_config = {
+	'print_chunks': False,
+	'print_commands': False
+}
+
 PDL_TAG = b'\xae'
 
 HOST_PACKET_FLOWID = b'\xff'
@@ -118,6 +123,13 @@ def main():
 		nargs='*'
 	)
 
+	argparser.add_argument(
+		'-v', '--verbose',
+		help="Increase verbosity (repeat for more)",
+		action='count',
+		default=0
+	)
+
 	args = argparser.parse_args()
 
 	pp = []
@@ -129,6 +141,12 @@ def main():
 			print("Cannot parse partition spec \"%s\"" % (p,))
 			sys.exit(1)
 	args.partitions_parsed = pp
+
+	if args.verbose >= 1:
+		g_config['print_chunks'] = True
+
+	if args.verbose >= 2:
+		g_config['print_commands'] = True
 
 	_do_upload(args)
 
@@ -185,7 +203,8 @@ def _send_partition_data(interface, partname, data, target_addr=0, chunk_size=40
 	total = 0
 	for (f, chunk) in enumerate(_chunk_data(data, chunk_size)):
 		total += len(chunk)
-		print("Sent chunk %d, size %d, total %d (%x)" % (f, len(chunk), total, total))
+		if g_config['print_chunks']:
+			print("Sent chunk %d, size %d, total %d (%x)" % (f, len(chunk), total, total))
 		_communicate(interface, Commands.MID_DATA, _pack32(f) + _pack32(len(chunk)) + chunk)
 
 	crc = binascii.crc32(data)
@@ -214,7 +233,8 @@ def _send_command(interface, cmd, payload=b''):
 		print("Command %r not in commands" % (cmd,))
 		sys.exit(2)
 
-	print("<- %s" % (cmd,))
+	if g_config['print_commands']:
+		print("<- %s" % (cmd,))
 	data = struct.pack('<I', cmdnum) + payload
 	_send_packet(interface, data)
 
@@ -224,11 +244,14 @@ def _receive_command(interface, raw_response=False):
 	(rsp,) = struct.unpack('<I', rspdata)
 
 	if raw_response:
+		if g_config['print_commands']:
+			print("-> (RAW) %r" % (data,))
 		return data
 	else:
 		for (key, e) in Responses.__members__.items():
 			if rsp == e.value:
-				print("-> %s" % (e,))
+				if g_config['print_commands']:
+					print("-> %s" % (e,))
 				return e
 
 		print("Response %r not in responses" % (rspdata,))
