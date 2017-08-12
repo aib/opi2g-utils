@@ -147,17 +147,17 @@ def _do_pdls(interface, pdl1path, pdl2path):
 		_send_partition_data(interface, "pdl2", f.read(), 0x80008000, chunk_size=4096)
 	_communicate(interface, Commands.EXEC_DATA, _pack32(0x80008000))
 
-def _upload_partitions(interface, partitions):
-		_communicate(interface, Commands.CONNECT)
+def _upload_partitions(interface, partitions, interject_ptbl):
+	_communicate(interface, Commands.CONNECT)
 
-#		image_list = ','.join(list(map(lambda p: p[0], partitions))).encode('ascii')
-#		crc = ?
-#		_communicate(interface, Commands.IMAGE_LIST, _pack32(0) + _pack32(crc) + image_list)
+	image_list = ','.join(list(map(lambda p: p[0], partitions))).encode('ascii')
+	crc = binascii.crc32(image_list)
+	_communicate(interface, Commands.IMAGE_LIST, _pack32(0) + _pack32(crc) + image_list)
 
-		for (pname, pfile) in partitions:
-			with open(pfile, 'rb') as f:
-				data = f.read()
-				_send_partition_data(interface, pname, data, chunk_size=256*1024)
+	for (pname, pfile) in partitions:
+		with open(pfile, 'rb') as f:
+			data = f.read()
+			_send_partition_data(interface, pname, data, chunk_size=256*1024)
 
 def _send_partition_data(interface, partname, data, target_addr=0, chunk_size=4096):
 	print("Sending partition %s (len %d) to 0x%08x" % (partname, len(data), target_addr))
