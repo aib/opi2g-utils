@@ -115,7 +115,7 @@ def main():
 	argparser.add_argument(
 		'partition',
 		help="<partition_name>:<image_file> pair to upload",
-		nargs='+'
+		nargs='*'
 	)
 
 	args = argparser.parse_args()
