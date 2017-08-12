@@ -191,7 +191,7 @@ def _upload_partitions(interface, partitions, interject_ptbl):
 
 			_send_partition_data(interface, pname, data, chunk_size=256*1024)
 
-	_communicate(sport, Commands.DOWNLOAD_FINISH)
+	_communicate(interface, Commands.DOWNLOAD_FINISH)
 
 def _send_partition_data(interface, partname, data, target_addr=0, chunk_size=4096):
 	print("Sending partition %s (len %d) to 0x%08x" % (partname, len(data), target_addr))
