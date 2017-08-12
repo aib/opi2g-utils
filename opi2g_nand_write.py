@@ -140,8 +140,6 @@ def _do_upload(args):
 		if len(args.partitions_parsed) > 0:
 			_upload_partitions(sport, args.partitions_parsed, args.interject_ptbl)
 
-		_communicate(sport, Commands.DOWNLOAD_FINISH)
-
 def _do_pdls(interface, pdl1path, pdl2path):
 	_communicate(interface, Commands.CONNECT)
 	with open(pdl1path, 'rb') as f:
@@ -171,6 +169,8 @@ def _upload_partitions(interface, partitions, interject_ptbl):
 				data = interjected_data
 
 			_send_partition_data(interface, pname, data, chunk_size=256*1024)
+
+	_communicate(sport, Commands.DOWNLOAD_FINISH)
 
 def _send_partition_data(interface, partname, data, target_addr=0, chunk_size=4096):
 	print("Sending partition %s (len %d) to 0x%08x" % (partname, len(data), target_addr))
