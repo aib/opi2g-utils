@@ -107,6 +107,12 @@ def main():
 	)
 
 	argparser.add_argument(
+		'--interject-ptbl',
+		help="Change the \"bootloader\" partition data on the fly to contain a NAND partition table",
+		default=None
+	)
+
+	argparser.add_argument(
 		'partition',
 		help="<partition_name>:<image_file> pair to upload",
 		nargs='+'
@@ -132,7 +138,7 @@ def _do_upload(args):
 			_do_pdls(sport, args.pdl1, args.pdl2)
 
 		if len(args.partitions_parsed) > 0:
-			_upload_partitions(sport, args.partitions_parsed)
+			_upload_partitions(sport, args.partitions_parsed, args.interject_ptbl)
 
 		_communicate(sport, Commands.DOWNLOAD_FINISH)
 
@@ -157,6 +163,13 @@ def _upload_partitions(interface, partitions, interject_ptbl):
 	for (pname, pfile) in partitions:
 		with open(pfile, 'rb') as f:
 			data = f.read()
+
+			if interject_ptbl is not None and pname == 'bootloader':
+				ptable = interject_ptbl.encode('ascii')
+				ptbin = _pack32(len(ptable)) + _pack32(binascii.crc32(ptable)) + ptable
+				interjected_data = data[0:CONFIG_MTD_PTBL_OFFS] + ptbin + data[CONFIG_MTD_PTBL_OFFS+len(ptbin):]
+				data = interjected_data
+
 			_send_partition_data(interface, pname, data, chunk_size=256*1024)
 
 def _send_partition_data(interface, partname, data, target_addr=0, chunk_size=4096):
