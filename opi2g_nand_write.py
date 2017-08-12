@@ -137,6 +137,9 @@ def _do_upload(args):
 		if not args.skippdl:
 			_do_pdls(sport, args.pdl1, args.pdl2)
 
+		partition_table = _communicate(sport, Commands.READ_PARTITION_TABLE, raw_response=True).decode('ascii')
+		print("Partition table: %s" % (partition_table,))
+
 		if len(args.partitions_parsed) > 0:
 			_upload_partitions(sport, args.partitions_parsed, args.interject_ptbl)
 
