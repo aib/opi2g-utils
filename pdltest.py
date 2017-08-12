@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import argparse
 import binascii
 import enum
 import struct
@@ -78,10 +79,61 @@ class Responses(enum.Enum):
 	MAX_RSP = 19
 
 def main():
-	with serial.Serial('/dev/ttyACM0', 115200) as sport:
-		if not 'skippdl' in sys.argv:
-			_do_pdls(sport, "/tmp/rom/pdl1.bin", "/tmp/rom/pdl22.bin")
-		_upload_partitions(sport)
+	example = "%s bootloader:bootloader.bin root:/tmp/ubi.img" % (sys.argv[0],)
+	argparser = argparse.ArgumentParser(epilog="Example:\n\t%s\n " % (example,), formatter_class=argparse.RawDescriptionHelpFormatter)
+
+	argparser.add_argument(
+		'-p', '--port',
+		help="Serial port to use",
+		default='/dev/ttyACM0'
+	)
+
+	argparser.add_argument(
+		'--pdl1',
+		help="PDL1 binary file to use",
+		default='pdl1.bin'
+	)
+
+	argparser.add_argument(
+		'--pdl2',
+		help="PDL2 binary file to use",
+		default='pdl2.bin'
+	)
+
+	argparser.add_argument(
+		'--skippdl', '--skip-pdl',
+		help="Skip uploading and executing the PDL1 and PDL2 stages",
+		action='store_true'
+	)
+
+	argparser.add_argument(
+		'partition',
+		help="<partition_name>:<image_file> pair to upload",
+		nargs='+'
+	)
+
+	args = argparser.parse_args()
+
+	pp = []
+	for p in args.partition:
+		try:
+			(pname, pfile) = p.split(':')
+			pp.append((pname, pfile))
+		except ValueError:
+			print("Cannot parse partition spec \"%s\"" % (p,))
+			sys.exit(1)
+	args.partitions_parsed = pp
+
+	_do_upload(args)
+
+def _do_upload(args):
+	with serial.Serial(args.port, 115200) as sport:
+		if not args.skippdl:
+			_do_pdls(sport, args.pdl1, args.pdl2)
+
+		if len(args.partitions_parsed) > 0:
+			_upload_partitions(sport, args.partitions_parsed)
+
 		_communicate(sport, Commands.DOWNLOAD_FINISH)
 
 def _do_pdls(interface, pdl1path, pdl2path):
@@ -95,23 +147,17 @@ def _do_pdls(interface, pdl1path, pdl2path):
 		_send_partition_data(interface, "pdl2", f.read(), 0x80008000, chunk_size=4096)
 	_communicate(interface, Commands.EXEC_DATA, _pack32(0x80008000))
 
-def _upload_partitions(interface):
+def _upload_partitions(interface, partitions):
 		_communicate(interface, Commands.CONNECT)
-		print(_communicate(interface, Commands.READ_PARTITION_TABLE, raw_response=True).decode('ascii'))
 
-#		_communicate(interface, Commands.IMAGE_LIST, _pack32(0) + _pack32(0x65646568) + "bootloader,nandroot".encode('ascii'))
+#		image_list = ','.join(list(map(lambda p: p[0], partitions))).encode('ascii')
+#		crc = ?
+#		_communicate(interface, Commands.IMAGE_LIST, _pack32(0) + _pack32(crc) + image_list)
 
-		with open("/home/aib/proj/opi/mtd3/mtd0.bak", 'rb') as f:
-			data = f.read()
-#			ptable = "mtdparts=rda_nand:2M@0(bootloader),510M(foo)".encode('ascii')
-#			ptbin = _pack32(len(ptable)) + _pack32(binascii.crc32(ptable)) + ptable
-#			interjected_data = data[0:CONFIG_MTD_PTBL_OFFS] + ptbin + data[CONFIG_MTD_PTBL_OFFS+len(ptbin):]
-#			_send_partition_data(interface, "bootloader", interjected_data)
-			_send_partition_data(interface, "bootloader", data, chunk_size=256*1024)
-
-		with open("/home/aib/proj/opi/mtd3/mtd1.bak", 'rb') as f:
-			data = f.read()
-			_send_partition_data(interface, "nandroot", data, chunk_size=256*1024)
+		for (pname, pfile) in partitions:
+			with open(pfile, 'rb') as f:
+				data = f.read()
+				_send_partition_data(interface, pname, data, chunk_size=256*1024)
 
 def _send_partition_data(interface, partname, data, target_addr=0, chunk_size=4096):
 	print("Sending partition %s (len %d) to 0x%08x" % (partname, len(data), target_addr))
