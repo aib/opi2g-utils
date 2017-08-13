@@ -286,7 +286,13 @@ def _receive_packet(interface):
 	data = interface.read(size)
 
 	if flowid == FLOWID_ERROR:
-		print("Error: %r" % (data,))
+		(errcode,) = struct.unpack('<I', data)
+		for (key, e) in Responses.__members__.items():
+			if errcode == e.value:
+				print("Error: %s" % (e,))
+				sys.exit(2)
+
+		print("Unknown error: %r" % (data,))
 		sys.exit(2)
 
 	if flowid not in [FLOWID_ACK, FLOWID_DATA]:
