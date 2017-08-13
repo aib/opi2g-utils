@@ -112,6 +112,12 @@ def main():
 	)
 
 	argparser.add_argument(
+		'--format-flash',
+		help="Format the entire memory prior to uploading the partitions",
+		action='store_true'
+	)
+
+	argparser.add_argument(
 		'--interject-ptbl',
 		help="Change the \"bootloader\" partition data on the fly to contain a NAND partition table",
 		default=None
@@ -156,6 +162,11 @@ def _do_upload(args):
 			_do_pdls(sport, args.pdl1, args.pdl2)
 
 		_print_partition_table(sport)
+
+		if args.format_flash:
+			print("Formatting flash memory...")
+			_communicate(sport, Commands.FORMAT_FLASH)
+			_print_partition_table(sport)
 
 		if len(args.partitions_parsed) > 0:
 			_upload_partitions(sport, args.partitions_parsed, args.interject_ptbl)
