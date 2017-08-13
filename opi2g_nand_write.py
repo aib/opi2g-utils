@@ -155,8 +155,7 @@ def _do_upload(args):
 		if not args.skippdl:
 			_do_pdls(sport, args.pdl1, args.pdl2)
 
-		partition_table = _communicate(sport, Commands.READ_PARTITION_TABLE, raw_response=True).decode('ascii')
-		print("Partition table: %s" % (partition_table,))
+		_print_partition_table(sport)
 
 		if len(args.partitions_parsed) > 0:
 			_upload_partitions(sport, args.partitions_parsed, args.interject_ptbl)
@@ -192,6 +191,10 @@ def _upload_partitions(interface, partitions, interject_ptbl):
 			_send_partition_data(interface, pname, data, chunk_size=256*1024)
 
 	_communicate(interface, Commands.DOWNLOAD_FINISH)
+
+def _print_partition_table(interface):
+	partition_table = _communicate(interface, Commands.READ_PARTITION_TABLE, raw_response=True).decode('ascii')
+	print("Partition table: %s" % (partition_table,))
 
 def _send_partition_data(interface, partname, data, target_addr=0, chunk_size=4096):
 	print("Sending partition %s (len %d) to 0x%08x" % (partname, len(data), target_addr))
