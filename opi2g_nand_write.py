@@ -156,7 +156,10 @@ def main():
 
 	_do_upload(args)
 
+	print("Done")
+
 def _do_upload(args):
+	print("Opening %s..." % (args.port,))
 	with serial.Serial(args.port, 115200) as sport:
 		if not args.skippdl:
 			_do_pdls(sport, args.pdl1, args.pdl2)
