@@ -118,12 +118,6 @@ def main():
 	)
 
 	argparser.add_argument(
-		'--interject-ptbl',
-		help="Change the \"bootloader\" partition data on the fly to contain a NAND partition table",
-		default=None
-	)
-
-	argparser.add_argument(
 		'partition',
 		help="<partition_name>:<image_file> pair to upload",
 		nargs='*'
@@ -172,7 +166,7 @@ def _do_upload(args):
 			_print_partition_table(sport)
 
 		if len(args.partitions_parsed) > 0:
-			_upload_partitions(sport, args.partitions_parsed, args.interject_ptbl)
+			_upload_partitions(sport, args.partitions_parsed)
 
 def _do_pdls(interface, pdl1path, pdl2path):
 	_communicate(interface, Commands.CONNECT)
@@ -185,7 +179,7 @@ def _do_pdls(interface, pdl1path, pdl2path):
 		_send_partition_data(interface, "pdl2", f.read(), 0x80008000, chunk_size=4096)
 	_communicate(interface, Commands.EXEC_DATA, _pack32(0x80008000))
 
-def _upload_partitions(interface, partitions, interject_ptbl):
+def _upload_partitions(interface, partitions):
 	_communicate(interface, Commands.CONNECT)
 
 	image_list = ','.join(list(map(lambda p: p[0], partitions))).encode('ascii')
@@ -195,13 +189,6 @@ def _upload_partitions(interface, partitions, interject_ptbl):
 	for (pname, pfile) in partitions:
 		with open(pfile, 'rb') as f:
 			data = f.read()
-
-			if interject_ptbl is not None and pname == 'bootloader':
-				ptable = interject_ptbl.encode('ascii')
-				ptbin = _pack32(len(ptable)) + _pack32(binascii.crc32(ptable)) + ptable
-				interjected_data = data[0:CONFIG_MTD_PTBL_OFFS] + ptbin + data[CONFIG_MTD_PTBL_OFFS+len(ptbin):]
-				data = interjected_data
-
 			_send_partition_data(interface, pname, data, chunk_size=256*1024)
 
 	_communicate(interface, Commands.DOWNLOAD_FINISH)
