@@ -7,7 +7,11 @@ import struct
 import sys
 import time
 
-import serial
+try:
+	import serial
+except ImportError:
+	print("This program requires the \"pyserial\" library")
+	sys.exit(1)
 
 g_config = {
 	'print_chunks': False,
