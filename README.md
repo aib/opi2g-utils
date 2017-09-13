@@ -18,7 +18,7 @@ This script analyzes an Android image used by the NAND update tool. If you suppl
 
 #### Run `opi2g_nand_write.py --help` for help
 
-This is a NAND flasher. It loads two extra bootloader stages (PDL1 and PDL2) and then tries to flash the given partitions using the given files. The partition table needs to be baked in to PDL2. The partition loading code in PDL2 needs to be patched as well (see issue #1); if this is not the case you need either to format the flash using `--format-flash` or reboot after loading PDL2.
+This is a NAND flasher. It loads two extra bootloader stages (PDL1 and PDL2) and then tries to flash the given partitions using the given files. The partition table needs to be baked into PDL2. The partition loading code in PDL2 needs to be patched as well (see issue #1); if it is not patched you need to either format the flash using `--format-flash` or reboot the device once after loading PDL2.
 
 I have [a fork](https://github.com/aib/u-boot-RDA8810) of U-Boot-RDA8810 suitable for creating a PDL2 as well as a NAND bootloader.
 
