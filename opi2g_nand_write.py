@@ -186,9 +186,9 @@ def _do_pdls(interface, pdl1path, pdl2path):
 def _upload_partitions(interface, partitions):
 	_communicate(interface, Commands.CONNECT)
 
-	image_list = ','.join(list(map(lambda p: p[0], partitions))).encode('ascii')
+	image_list = ','.join(list(map(lambda p: p[0], partitions))).encode('ascii') + b'\0'
 	crc = binascii.crc32(image_list)
-	_communicate(interface, Commands.IMAGE_LIST, _pack32(0) + _pack32(crc) + image_list)
+	_communicate(interface, Commands.IMAGE_LIST, _pack32(0) + _pack32(len(image_list)) + image_list)
 
 	for (pname, pfile) in partitions:
 		with open(pfile, 'rb') as f:
