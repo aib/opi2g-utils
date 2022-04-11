@@ -1,6 +1,6 @@
 # What is this?
 
-These are a set of tools I wrote while hacking the Orange Pi 2G-IOT to run a custom linux distribution. There is a detailed guide/tutorial at https://www.aib42.net/article/hacking-orangepi-2g.
+These are a set of tools I wrote while hacking the Orange Pi 2G-IOT to run a custom linux distribution. There is a detailed guide/tutorial at https://www.aib42.net/article/hacking-orangepi-2g. (Backup at https://www.aib.link/article/hacking-orangepi-2g)
 
 # How do I use...
 
